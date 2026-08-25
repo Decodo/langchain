@@ -3,20 +3,25 @@
 This module provides two tools:
 
 - ``DecodoWebScrapeTool``: Scrapes any URL and returns the page content as
-  markdown (or raw HTML/text) using the ``universal`` target.
+  markdown (or raw HTML/text).
 - ``DecodoSearchTool``: Searches Google, Amazon, or Reddit and returns
   structured JSON results.
 
-Both tools call the Decodo HTTP API directly via ``httpx`` and authenticate
-with a Basic token supplied via the ``decodo_api_token`` field or the
-``DECODO_API_TOKEN`` environment variable.
+Both tools support two authentication modes selected via ``auth_mode``:
+
+* ``"basic"`` *(default)* — username:password credentials encoded as a Basic
+  auth token.  Uses the ``/v2/scrape`` endpoint.
+* ``"token"`` — a plain API token.  Uses the ``/unified/v1/scrape`` endpoint.
+
+In both modes the ``Authorization: Basic <value>`` header is used; only the
+value and the target endpoint differ.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from typing import Any, Optional, Type
+from typing import Any, Literal, Optional, Type
 
 import httpx
 from langchain_core.callbacks import CallbackManagerForToolRun
@@ -24,7 +29,11 @@ from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, SecretStr, model_validator
 
 _DEFAULT_BASE_URL = "https://scraper-api.decodo.com"
-_SCRAPE_PATH = "/v2/scrape"
+
+# Endpoint selected by auth_mode
+_V2_SCRAPE_PATH = "/v2/scrape"
+_UNIFIED_SCRAPE_PATH = "/unified/v1/scrape"
+
 _DEFAULT_TIMEOUT = 180.0  # seconds
 
 _ENGINE_TARGET_MAP: dict[str, str] = {
@@ -36,14 +45,28 @@ _ENGINE_TARGET_MAP: dict[str, str] = {
 _REDDIT_SITE_FILTER = "site:reddit.com"
 
 
+def _scrape_path(auth_mode: str) -> str:
+    """Return the API path for the given auth mode.
+
+    Args:
+        auth_mode: Either ``"basic"`` or ``"token"``.
+
+    Returns:
+        The URL path string for the scrape endpoint.
+    """
+    return _UNIFIED_SCRAPE_PATH if auth_mode == "token" else _V2_SCRAPE_PATH
+
+
 def _build_headers(token: str) -> dict[str, str]:
     """Build HTTP headers for a Decodo API request.
 
     Args:
-        token: Raw Decodo API token string.
+        token: Raw token string. For ``"basic"`` auth this is the
+            base64-encoded ``username:password`` value; for ``"token"`` auth
+            this is the plain API token.
 
     Returns:
-        Dictionary of HTTP headers.
+        Dictionary of HTTP headers including ``Authorization``.
     """
     return {
         "Authorization": f"Basic {token}",
@@ -57,14 +80,17 @@ def _do_scrape(
     token: str,
     base_url: str,
     payload: dict[str, Any],
+    auth_mode: str = "basic",
     timeout: float = _DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
-    """POST to the Decodo scrape endpoint and return the parsed JSON response.
+    """POST to the appropriate Decodo scrape endpoint and return parsed JSON.
 
     Args:
-        token: Raw Decodo API token string.
+        token: Raw token string (format depends on ``auth_mode``).
         base_url: Base URL of the Decodo API.
         payload: Request body to send as JSON.
+        auth_mode: ``"basic"`` (username:password, ``/v2/scrape``) or
+            ``"token"`` (API token, ``/unified/v1/scrape``).
         timeout: Request timeout in seconds.
 
     Returns:
@@ -73,7 +99,7 @@ def _do_scrape(
     Raises:
         RuntimeError: On timeout, network error, or non-2xx HTTP response.
     """
-    url = f"{base_url}{_SCRAPE_PATH}"
+    url = f"{base_url}{_scrape_path(auth_mode)}"
     headers = _build_headers(token)
 
     try:
@@ -153,22 +179,42 @@ class _SearchInput(BaseModel):
 class DecodoWebScrapeTool(BaseTool):
     """Scrape any URL and return its content as markdown/text.
 
-    The tool uses Decodo's ``universal`` target which handles JavaScript
-    rendering, anti-bot protection, and proxy rotation automatically.
+    The tool handles JavaScript rendering, anti-bot protection, and proxy
+    rotation automatically via the Decodo API.
+
+    Two authentication modes are supported via ``auth_mode``:
+
+    * ``"basic"`` *(default)* — supply the base64-encoded
+      ``username:password`` string as ``decodo_api_token`` (or set
+      ``DECODO_API_TOKEN``).  Requests go to ``/v2/scrape``.
+    * ``"token"`` — supply a plain API token as ``decodo_api_token`` (or set
+      ``DECODO_API_TOKEN``).  Requests go to ``/unified/v1/scrape``.
+
+    Both modes send ``Authorization: Basic <value>``; the value and endpoint
+    differ.
 
     Attributes:
-        decodo_api_token: Decodo API token. Reads from the
-            ``DECODO_API_TOKEN`` environment variable when not provided
-            explicitly.
+        decodo_api_token: Credential value. For ``"basic"`` mode this is the
+            base64-encoded ``username:password``; for ``"token"`` mode this is
+            the plain API token. Falls back to the ``DECODO_API_TOKEN``
+            environment variable when not provided explicitly.
+        auth_mode: Authentication mode — ``"basic"`` (default) or ``"token"``.
         base_url: Base URL of the Decodo Scraper API.
 
-    Example::
+    Example — basic auth (default)::
 
         from langchain_decodo import DecodoWebScrapeTool
 
-        tool = DecodoWebScrapeTool(decodo_api_token="YOUR_TOKEN")
+        tool = DecodoWebScrapeTool(decodo_api_token="base64(user:pass)")
         result = tool.run("https://example.com")
-        print(result)
+
+    Example — token auth::
+
+        tool = DecodoWebScrapeTool(
+            decodo_api_token="your-api-token",
+            auth_mode="token",
+        )
+        result = tool.run("https://example.com")
     """
 
     name: str = "decodo_scrape_url"
@@ -184,8 +230,17 @@ class DecodoWebScrapeTool(BaseTool):
     decodo_api_token: SecretStr = Field(
         default=SecretStr(""),
         description=(
-            "Decodo API token. Reads from the ``DECODO_API_TOKEN`` environment "
-            "variable when not provided explicitly."
+            "Credential value. For 'basic' auth: base64-encoded username:password. "
+            "For 'token' auth: plain API token. "
+            "Falls back to the DECODO_API_TOKEN environment variable."
+        ),
+    )
+    auth_mode: Literal["basic", "token"] = Field(
+        default="basic",
+        description=(
+            "Authentication mode. "
+            "'basic' (default): username:password credentials, uses /v2/scrape. "
+            "'token': plain API token, uses /unified/v1/scrape."
         ),
     )
     base_url: str = Field(
@@ -235,7 +290,7 @@ class DecodoWebScrapeTool(BaseTool):
             )
 
         payload: dict[str, Any] = {"target": "universal", "url": url}
-        response = _do_scrape(token, self.base_url, payload)
+        response = _do_scrape(token, self.base_url, payload, auth_mode=self.auth_mode)
         content = _extract_content(response)
         return content if content else "(No content returned by Decodo API)"
 
@@ -249,22 +304,33 @@ class DecodoSearchTool(BaseTool):
     * ``amazon``  → ``amazon_search`` target
     * ``reddit``  → ``google_search`` with ``site:reddit.com`` prepended
 
-    Results are returned as a JSON string containing a list of result objects.
-    Each result object has at minimum a ``content`` field with the parsed data.
+    Two authentication modes are supported via ``auth_mode``:
+
+    * ``"basic"`` *(default)* — supply the base64-encoded
+      ``username:password`` string as ``decodo_api_token`` (or set
+      ``DECODO_API_TOKEN``).  Requests go to ``/v2/scrape``.
+    * ``"token"`` — supply a plain API token as ``decodo_api_token`` (or set
+      ``DECODO_API_TOKEN``).  Requests go to ``/unified/v1/scrape``.
 
     Attributes:
-        decodo_api_token: Decodo API token. Reads from the
-            ``DECODO_API_TOKEN`` environment variable when not provided
-            explicitly.
+        decodo_api_token: Credential value. Falls back to ``DECODO_API_TOKEN``.
+        auth_mode: Authentication mode — ``"basic"`` (default) or ``"token"``.
         engine: Default search engine (``google``, ``amazon``, or ``reddit``).
 
-    Example::
+    Example — basic auth (default)::
 
         from langchain_decodo import DecodoSearchTool
 
-        tool = DecodoSearchTool(decodo_api_token="YOUR_TOKEN")
+        tool = DecodoSearchTool(decodo_api_token="base64(user:pass)")
         results = tool.run({"query": "best Python web scraping libraries"})
-        print(results)
+
+    Example — token auth::
+
+        tool = DecodoSearchTool(
+            decodo_api_token="your-api-token",
+            auth_mode="token",
+        )
+        results = tool.run({"query": "best Python web scraping libraries"})
     """
 
     name: str = "decodo_search"
@@ -283,8 +349,17 @@ class DecodoSearchTool(BaseTool):
     decodo_api_token: SecretStr = Field(
         default=SecretStr(""),
         description=(
-            "Decodo API token. Reads from the ``DECODO_API_TOKEN`` environment "
-            "variable when not provided explicitly."
+            "Credential value. For 'basic' auth: base64-encoded username:password. "
+            "For 'token' auth: plain API token. "
+            "Falls back to the DECODO_API_TOKEN environment variable."
+        ),
+    )
+    auth_mode: Literal["basic", "token"] = Field(
+        default="basic",
+        description=(
+            "Authentication mode. "
+            "'basic' (default): username:password credentials, uses /v2/scrape. "
+            "'token': plain API token, uses /unified/v1/scrape."
         ),
     )
     engine: str = Field(
@@ -352,7 +427,9 @@ class DecodoSearchTool(BaseTool):
             "limit": num_results,
         }
 
-        response = _do_scrape(token, _DEFAULT_BASE_URL, payload)
+        response = _do_scrape(
+            token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode
+        )
         results = response.get("results", [])
 
         serialisable = []
