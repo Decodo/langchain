@@ -23,6 +23,14 @@ export DECODO_API_TOKEN="your-decodo-api-token"
 
 Get a token from the [Decodo Dashboard](https://app.decodo.com).
 
+By default every class expects basic credentials (base64-encoded
+`username:password`). If your token is a plain API token, pass
+`auth_mode="token"`.:
+
+```python
+tool = DecodoWebScrapeTool(auth_mode="token")
+```
+
 ## Components
 
 ### `DecodoWebScrapeTool`
@@ -71,11 +79,11 @@ Returns a JSON string — a list of objects with `content`, `url`, and
 
 Supported engines:
 
-| `engine` | Decodo target | Description |
-|---|---|---|
-| `google` | `google_search` | Google SERP |
-| `amazon` | `amazon_search` | Amazon product search |
-| `reddit` | `google_search` + `site:reddit.com` | Reddit via Google |
+| `engine` | Decodo target                       | Description           |
+| -------- | ----------------------------------- | --------------------- |
+| `google` | `google_search`                     | Google SERP           |
+| `amazon` | `amazon_search`                     | Amazon product search |
+| `reddit` | `google_search` + `site:reddit.com` | Reddit via Google     |
 
 ### `DecodoLoader`
 
