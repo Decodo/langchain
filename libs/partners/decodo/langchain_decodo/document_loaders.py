@@ -103,7 +103,11 @@ def _scrape_url(
         RuntimeError: On timeout, network error, or non-2xx HTTP response.
     """
     endpoint = f"{_API_BASE}{_scrape_path(auth_mode)}"
-    payload: dict[str, Any] = {"target": "universal", "url": url}
+    payload: dict[str, Any] = {
+        "target": "universal",
+        "url": url,
+        "markdown": True,
+    }
 
     try:
         response = httpx.post(

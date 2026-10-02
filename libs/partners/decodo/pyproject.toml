@@ -41,8 +41,8 @@ test_integration = []
 
 [project.urls]
 Homepage = "https://decodo.com"
-Documentation = "https://developers.decodo.com"
-Repository = "https://github.com/langchain-ai/langchain/tree/master/libs/partners/decodo"
+Documentation = "https://help.decodo.com"
+Repository = "https://github.com/Decodo/langchain/tree/master/libs/partners/decodo"
 
 [tool.hatch.build.targets.wheel]
 packages = ["langchain_decodo"]

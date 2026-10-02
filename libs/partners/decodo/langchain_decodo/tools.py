@@ -289,7 +289,11 @@ class DecodoWebScrapeTool(BaseTool):
                 "field or the ``DECODO_API_TOKEN`` environment variable."
             )
 
-        payload: dict[str, Any] = {"target": "universal", "url": url}
+        payload: dict[str, Any] = {
+            "target": "universal",
+            "url": url,
+            "markdown": True,
+        }
         response = _do_scrape(token, self.base_url, payload, auth_mode=self.auth_mode)
         content = _extract_content(response)
         return content if content else "(No content returned by Decodo API)"
@@ -425,12 +429,30 @@ class DecodoSearchTool(BaseTool):
             "target": target,
             "query": effective_query,
             "limit": num_results,
+            "parse": True,
         }
 
         response = _do_scrape(
             token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode
         )
         results = response.get("results", [])
+
+        # The API answers HTTP 200 with a per-result failure status (e.g. 613
+        # "not able to scrape the target"); surface it so agents can retry
+        # instead of reading it as "no results".
+        failed = [
+            entry
+            for entry in results
+            if isinstance(entry.get("status_code"), int)
+            and entry["status_code"] >= 400
+        ]
+        if results and len(failed) == len(results):
+            first = failed[0]
+            detail = first.get("content") if isinstance(first.get("content"), str) else ""
+            raise RuntimeError(
+                f"Decodo search failed with status {first['status_code']}"
+                + (f": {detail}" if detail else "")
+            )
 
         serialisable = []
         for entry in results:

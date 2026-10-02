@@ -112,6 +112,7 @@ class TestDecodoWebScrapeToolRun:
         payload = kwargs["json"]
         assert payload["target"] == "universal"
         assert payload["url"] == "https://target.com/page"
+        assert payload["markdown"] is True
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_authorization_header(self, mock_post: MagicMock) -> None:
@@ -260,6 +261,28 @@ class TestDecodoSearchToolRun:
 
         _, kwargs = mock_post.call_args
         assert kwargs["json"]["limit"] == 5
+
+    @patch("langchain_decodo.tools.httpx.post")
+    def test_requests_parsed_results(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response("{}"))
+        DecodoSearchTool(decodo_api_token=SecretStr("tok"))._run("q")
+        assert mock_post.call_args[1]["json"]["parse"] is True
+
+    @patch("langchain_decodo.tools.httpx.post")
+    def test_failed_scrape_status_raises(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = _make_mock_httpx_response(
+            {
+                "results": [
+                    {
+                        "content": "We were not able to scrape the target",
+                        "status_code": 613,
+                    }
+                ]
+            }
+        )
+        tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
+        with pytest.raises(RuntimeError, match="613"):
+            tool._run("q")
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_empty_results_returns_empty_json_list(self, mock_post: MagicMock) -> None:
