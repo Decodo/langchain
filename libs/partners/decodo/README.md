@@ -142,7 +142,7 @@ print(result["messages"][-1].content)
 ## RAG pipeline example
 
 ```bash
-pip install langchain-openai langchain-text-splitters langchain-decodo
+pip install langchain-openai langchain-text-splitters langchain-decodo numpy
 ```
 
 ```python

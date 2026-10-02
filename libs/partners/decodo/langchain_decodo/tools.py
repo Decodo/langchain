@@ -121,6 +121,12 @@ def _do_scrape(
     return response.json()  # type: ignore[no-any-return]
 
 
+def _is_failed(entry: dict[str, Any]) -> bool:
+    """Return whether a result entry carries a failed (4xx/5xx or 6xx) status."""
+    status = entry.get("status_code")
+    return isinstance(status, int) and status >= 400
+
+
 def _extract_content(response: dict[str, Any]) -> str:
     """Pull the first result's content string from a Decodo API response.
 
@@ -431,21 +437,13 @@ class DecodoSearchTool(BaseTool):
         response = _do_scrape(token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode)
         results = response.get("results", [])
 
-        # The API answers HTTP 200 with a per-result failure status (e.g. 613
-        # "not able to scrape the target"); surface it so agents can retry
-        # instead of reading it as "no results".
-        failed = [
-            entry
-            for entry in results
-            if isinstance(entry.get("status_code"), int) and entry["status_code"] >= 400
-        ]
-        if results and len(failed) == len(results):
-            first = failed[0]
-            detail = first.get("content") if isinstance(first.get("content"), str) else ""
-            raise RuntimeError(
-                f"Decodo search failed with status {first['status_code']}"
-                + (f": {detail}" if detail else "")
-            )
+        # A failed scrape comes back as HTTP 200, either with a failed status
+        # inside `results` or with no `results` at all (e.g. status 613). Raise
+        # so agents can retry instead of reading it as "no results".
+        if not results or all(_is_failed(entry) for entry in results):
+            status = results[0].get("status_code") if results else response.get("status_code")
+            message = response.get("message") or "no results returned"
+            raise RuntimeError(f"Decodo search failed (status {status}): {message}")
 
         serialisable = []
         for entry in results:
