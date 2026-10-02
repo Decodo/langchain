@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Literal, Optional, Type
+from typing import Any, Literal
 
 import httpx
 from langchain_core.callbacks import CallbackManagerForToolRun
@@ -105,9 +105,7 @@ def _do_scrape(
     try:
         response = httpx.post(url, headers=headers, json=payload, timeout=timeout)
     except httpx.TimeoutException as exc:
-        raise RuntimeError(
-            f"Decodo API request timed out after {timeout}s: {exc}"
-        ) from exc
+        raise RuntimeError(f"Decodo API request timed out after {timeout}s: {exc}") from exc
     except httpx.RequestError as exc:
         raise RuntimeError(f"Decodo API network error: {exc}") from exc
 
@@ -225,7 +223,7 @@ class DecodoWebScrapeTool(BaseTool):
         "automatically. Use this when you need the complete text of a specific URL. "
         "Input: a valid URL string (must include http:// or https://)."
     )
-    args_schema: Type[BaseModel] = _WebScrapeInput
+    args_schema: type[BaseModel] = _WebScrapeInput
 
     decodo_api_token: SecretStr = Field(
         default=SecretStr(""),
@@ -267,7 +265,7 @@ class DecodoWebScrapeTool(BaseTool):
     def _run(
         self,
         url: str,
-        run_manager: Optional[CallbackManagerForToolRun] = None,
+        run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Scrape the given URL and return its content.
 
@@ -348,7 +346,7 @@ class DecodoSearchTool(BaseTool):
         "'num_results' (optional: integer 1-100; default 10). "
         "Use 'amazon' to search for products, 'reddit' for community discussions."
     )
-    args_schema: Type[BaseModel] = _SearchInput
+    args_schema: type[BaseModel] = _SearchInput
 
     decodo_api_token: SecretStr = Field(
         default=SecretStr(""),
@@ -392,7 +390,7 @@ class DecodoSearchTool(BaseTool):
         query: str,
         engine: str = "google",
         num_results: int = 10,
-        run_manager: Optional[CallbackManagerForToolRun] = None,
+        run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Execute a search and return results as a JSON string.
 
@@ -421,9 +419,7 @@ class DecodoSearchTool(BaseTool):
         target = _ENGINE_TARGET_MAP.get(engine, "google_search")
 
         # Prepend Reddit site filter when using the reddit pseudo-engine.
-        effective_query = (
-            f"{_REDDIT_SITE_FILTER} {query}" if engine == "reddit" else query
-        )
+        effective_query = f"{_REDDIT_SITE_FILTER} {query}" if engine == "reddit" else query
 
         payload: dict[str, Any] = {
             "target": target,
@@ -432,9 +428,7 @@ class DecodoSearchTool(BaseTool):
             "parse": True,
         }
 
-        response = _do_scrape(
-            token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode
-        )
+        response = _do_scrape(token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode)
         results = response.get("results", [])
 
         # The API answers HTTP 200 with a per-result failure status (e.g. 613
@@ -443,8 +437,7 @@ class DecodoSearchTool(BaseTool):
         failed = [
             entry
             for entry in results
-            if isinstance(entry.get("status_code"), int)
-            and entry["status_code"] >= 400
+            if isinstance(entry.get("status_code"), int) and entry["status_code"] >= 400
         ]
         if results and len(failed) == len(results):
             first = failed[0]

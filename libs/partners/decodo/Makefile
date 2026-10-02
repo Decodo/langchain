@@ -1,5 +1,7 @@
 
-.PHONY: all lint format test tests integration_tests help
+.PHONY: all lint lint_package lint_tests format test tests integration_tests help
+
+PYTEST_EXTRA ?=
 
 all: help
 
@@ -8,24 +10,29 @@ all: help
 ######################
 
 lint format: PYTHON_FILES=.
-lint:
-	ruff check $(PYTHON_FILES)
-	ruff format $(PYTHON_FILES) --diff
-	mypy $(PYTHON_FILES)
+lint_package: PYTHON_FILES=langchain_decodo
+lint_tests: PYTHON_FILES=tests
+lint_tests: MYPY_CACHE=.mypy_cache_test
+MYPY_CACHE=.mypy_cache
+
+lint lint_package lint_tests:
+	uv run --group lint --group typing ruff check $(PYTHON_FILES)
+	uv run --group lint --group typing ruff format $(PYTHON_FILES) --diff
+	mkdir -p $(MYPY_CACHE) && uv run --group lint --group typing mypy $(PYTHON_FILES) --cache-dir $(MYPY_CACHE)
 
 format:
-	ruff format $(PYTHON_FILES)
-	ruff check --fix $(PYTHON_FILES)
+	uv run --group lint ruff format $(PYTHON_FILES)
+	uv run --group lint ruff check --fix $(PYTHON_FILES)
 
 ######################
 # TESTING
 ######################
 
 tests test:
-	pytest tests/unit_tests
+	uv run --group test pytest $(PYTEST_EXTRA) tests/unit_tests
 
 integration_tests:
-	pytest tests/integration_tests
+	uv run --group test --group test_integration pytest tests/integration_tests
 
 ######################
 # HELP

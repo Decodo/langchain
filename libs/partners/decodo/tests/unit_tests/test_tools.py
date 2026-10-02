@@ -14,11 +14,10 @@ import pytest
 from pydantic import SecretStr
 
 from langchain_decodo.tools import (
+    _ENGINE_TARGET_MAP,
     DecodoSearchTool,
     DecodoWebScrapeTool,
-    _ENGINE_TARGET_MAP,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,9 +37,7 @@ def _make_api_response(content: str = "Hello world") -> dict[str, Any]:
     }
 
 
-def _make_mock_httpx_response(
-    json_data: dict[str, Any], status_code: int = 200
-) -> MagicMock:
+def _make_mock_httpx_response(json_data: dict[str, Any], status_code: int = 200) -> MagicMock:
     """Build a mock that behaves like an httpx.Response."""
     mock_resp = MagicMock()
     mock_resp.is_success = status_code < 400
@@ -325,14 +322,14 @@ class TestArgsSchema:
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("x"))
         schema = tool.args_schema
         assert schema is not None
-        instance = schema(url="https://example.com")
+        instance: Any = schema(url="https://example.com")
         assert instance.url == "https://example.com"
 
     def test_search_schema_defaults(self) -> None:
         tool = DecodoSearchTool(decodo_api_token=SecretStr("x"))
         schema = tool.args_schema
         assert schema is not None
-        instance = schema(query="hello")
+        instance: Any = schema(query="hello")
         assert instance.engine == "google"
         assert instance.num_results == 10
 
@@ -396,7 +393,8 @@ class TestAuthMode:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         for mode in ("basic", "token"):
             tool = DecodoWebScrapeTool(
-                decodo_api_token=SecretStr("mytoken"), auth_mode=mode  # type: ignore[arg-type]
+                decodo_api_token=SecretStr("mytoken"),
+                auth_mode=mode,
             )
             tool._run("https://example.com")
             _, kwargs = mock_post.call_args

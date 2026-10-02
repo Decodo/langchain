@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Iterator, Literal
+from collections.abc import Iterator
+from typing import Any, Literal
 
 import httpx
 from langchain_core.document_loaders import BaseLoader
@@ -117,13 +118,9 @@ def _scrape_url(
             timeout=timeout,
         )
     except httpx.TimeoutException as exc:
-        raise RuntimeError(
-            f"Decodo API request for '{url}' timed out after {timeout}s"
-        ) from exc
+        raise RuntimeError(f"Decodo API request for '{url}' timed out after {timeout}s") from exc
     except httpx.RequestError as exc:
-        raise RuntimeError(
-            f"Decodo API network error while fetching '{url}': {exc}"
-        ) from exc
+        raise RuntimeError(f"Decodo API network error while fetching '{url}': {exc}") from exc
 
     if not response.is_success:
         try:
