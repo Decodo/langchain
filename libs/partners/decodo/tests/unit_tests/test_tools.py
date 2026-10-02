@@ -14,11 +14,10 @@ import pytest
 from pydantic import SecretStr
 
 from langchain_decodo.tools import (
+    _ENGINE_TARGET_MAP,
     DecodoSearchTool,
     DecodoWebScrapeTool,
-    _ENGINE_TARGET_MAP,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,9 +37,7 @@ def _make_api_response(content: str = "Hello world") -> dict[str, Any]:
     }
 
 
-def _make_mock_httpx_response(
-    json_data: dict[str, Any], status_code: int = 200
-) -> MagicMock:
+def _make_mock_httpx_response(json_data: dict[str, Any], status_code: int = 200) -> MagicMock:
     """Build a mock that behaves like an httpx.Response."""
     mock_resp = MagicMock()
     mock_resp.is_success = status_code < 400
@@ -112,6 +109,7 @@ class TestDecodoWebScrapeToolRun:
         payload = kwargs["json"]
         assert payload["target"] == "universal"
         assert payload["url"] == "https://target.com/page"
+        assert payload["markdown"] is True
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_authorization_header(self, mock_post: MagicMock) -> None:
@@ -217,7 +215,7 @@ class TestDecodoSearchToolRun:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_google_engine_maps_to_correct_target(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
         tool._run("something", engine="google")
 
@@ -226,7 +224,7 @@ class TestDecodoSearchToolRun:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_amazon_engine_maps_to_correct_target(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
         tool._run("laptop", engine="amazon")
 
@@ -235,7 +233,7 @@ class TestDecodoSearchToolRun:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_reddit_engine_prepends_site_filter(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
         tool._run("best books", engine="reddit")
 
@@ -245,7 +243,7 @@ class TestDecodoSearchToolRun:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_unknown_engine_defaults_to_google(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
         tool._run("query", engine="bing")
 
@@ -254,7 +252,7 @@ class TestDecodoSearchToolRun:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_num_results_forwarded(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
         tool._run("query", num_results=5)
 
@@ -262,11 +260,40 @@ class TestDecodoSearchToolRun:
         assert kwargs["json"]["limit"] == 5
 
     @patch("langchain_decodo.tools.httpx.post")
-    def test_empty_results_returns_empty_json_list(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+    def test_requests_parsed_results(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response("{}"))
+        DecodoSearchTool(decodo_api_token=SecretStr("tok"))._run("q")
+        assert mock_post.call_args[1]["json"]["parse"] is True
+
+    @patch("langchain_decodo.tools.httpx.post")
+    def test_failed_scrape_status_raises(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = _make_mock_httpx_response(
+            {
+                "results": [
+                    {
+                        "content": "We were not able to scrape the target",
+                        "status_code": 613,
+                    }
+                ]
+            }
+        )
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
-        result = tool._run("nothing")
-        assert json.loads(result) == []
+        with pytest.raises(RuntimeError, match="613"):
+            tool._run("q")
+
+    @patch("langchain_decodo.tools.httpx.post")
+    @pytest.mark.parametrize(
+        "response",
+        [
+            {"results": []},
+            {"status": "failed", "status_code": 613, "message": "We were not able to scrape"},
+        ],
+    )
+    def test_no_results_raises(self, mock_post: MagicMock, response: dict[str, Any]) -> None:
+        mock_post.return_value = _make_mock_httpx_response(response)
+        tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"))
+        with pytest.raises(RuntimeError, match="Decodo search failed"):
+            tool._run("nothing")
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_api_error_raises_runtime_error(self, mock_post: MagicMock) -> None:
@@ -279,7 +306,7 @@ class TestDecodoSearchToolRun:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_authorization_header(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("secret"))
         tool._run("query")
 
@@ -302,14 +329,14 @@ class TestArgsSchema:
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("x"))
         schema = tool.args_schema
         assert schema is not None
-        instance = schema(url="https://example.com")
+        instance: Any = schema(url="https://example.com")
         assert instance.url == "https://example.com"
 
     def test_search_schema_defaults(self) -> None:
         tool = DecodoSearchTool(decodo_api_token=SecretStr("x"))
         schema = tool.args_schema
         assert schema is not None
-        instance = schema(query="hello")
+        instance: Any = schema(query="hello")
         assert instance.engine == "google"
         assert instance.num_results == 10
 
@@ -343,7 +370,7 @@ class TestAuthMode:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_search_basic_mode_uses_v2_endpoint(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"), auth_mode="basic")
         tool._run("query")
 
@@ -352,7 +379,7 @@ class TestAuthMode:
 
     @patch("langchain_decodo.tools.httpx.post")
     def test_search_token_mode_uses_unified_endpoint(self, mock_post: MagicMock) -> None:
-        mock_post.return_value = _make_mock_httpx_response({"results": []})
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"), auth_mode="token")
         tool._run("query")
 
@@ -373,7 +400,8 @@ class TestAuthMode:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         for mode in ("basic", "token"):
             tool = DecodoWebScrapeTool(
-                decodo_api_token=SecretStr("mytoken"), auth_mode=mode  # type: ignore[arg-type]
+                decodo_api_token=SecretStr("mytoken"),
+                auth_mode=mode,
             )
             tool._run("https://example.com")
             _, kwargs = mock_post.call_args

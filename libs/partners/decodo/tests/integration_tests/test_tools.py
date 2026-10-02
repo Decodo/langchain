@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+from typing import Any
 
 import pytest
 
@@ -23,21 +24,21 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture()
-def scrape_tool():  # type: ignore[return]
+def scrape_tool() -> Any:
     from langchain_decodo.tools import DecodoWebScrapeTool
 
     return DecodoWebScrapeTool()
 
 
 @pytest.fixture()
-def search_tool():  # type: ignore[return]
+def search_tool() -> Any:
     from langchain_decodo.tools import DecodoSearchTool
 
     return DecodoSearchTool()
 
 
 @pytest.fixture()
-def loader():  # type: ignore[return]
+def loader() -> Any:
     from langchain_decodo import DecodoLoader
 
     return DecodoLoader(urls=["https://example.com"])
@@ -53,7 +54,7 @@ class TestDecodoWebScrapeToolIntegration:
         from langchain_decodo.tools import DecodoWebScrapeTool
 
         assert isinstance(scrape_tool, DecodoWebScrapeTool)
-        result = scrape_tool._run("https://example.com")  # type: ignore[union-attr]
+        result = scrape_tool._run("https://example.com")
         assert isinstance(result, str)
         assert len(result) > 0
         # example.com always contains "Example Domain"
@@ -63,7 +64,7 @@ class TestDecodoWebScrapeToolIntegration:
         from langchain_decodo.tools import DecodoWebScrapeTool
 
         assert isinstance(scrape_tool, DecodoWebScrapeTool)
-        result = scrape_tool._run("https://httpbin.org/html")  # type: ignore[union-attr]
+        result = scrape_tool._run("https://httpbin.org/html")
         assert isinstance(result, str)
 
 
@@ -77,7 +78,7 @@ class TestDecodoSearchToolIntegration:
         from langchain_decodo.tools import DecodoSearchTool
 
         assert isinstance(search_tool, DecodoSearchTool)
-        raw = search_tool._run("Python programming language", engine="google", num_results=3)  # type: ignore[union-attr]
+        raw = search_tool._run("Python programming language", engine="google", num_results=3)
         results = json.loads(raw)
         assert isinstance(results, list)
         assert len(results) > 0
@@ -89,7 +90,7 @@ class TestDecodoSearchToolIntegration:
         from langchain_decodo.tools import DecodoSearchTool
 
         assert isinstance(search_tool, DecodoSearchTool)
-        raw = search_tool._run("Python book", engine="amazon", num_results=3)  # type: ignore[union-attr]
+        raw = search_tool._run("Python book", engine="amazon", num_results=3)
         results = json.loads(raw)
         assert isinstance(results, list)
 
@@ -98,7 +99,7 @@ class TestDecodoSearchToolIntegration:
 
         assert isinstance(search_tool, DecodoSearchTool)
         # Should not raise; results may be empty depending on query
-        raw = search_tool._run("best Python libraries", engine="reddit", num_results=3)  # type: ignore[union-attr]
+        raw = search_tool._run("best Python libraries", engine="reddit", num_results=3)
         results = json.loads(raw)
         assert isinstance(results, list)
 
