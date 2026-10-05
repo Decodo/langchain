@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Literal, Optional, Type
+from typing import Any, Literal
 
 import httpx
 from langchain_core.callbacks import CallbackManagerForToolRun
@@ -105,9 +105,7 @@ def _do_scrape(
     try:
         response = httpx.post(url, headers=headers, json=payload, timeout=timeout)
     except httpx.TimeoutException as exc:
-        raise RuntimeError(
-            f"Decodo API request timed out after {timeout}s: {exc}"
-        ) from exc
+        raise RuntimeError(f"Decodo API request timed out after {timeout}s: {exc}") from exc
     except httpx.RequestError as exc:
         raise RuntimeError(f"Decodo API network error: {exc}") from exc
 
@@ -121,6 +119,12 @@ def _do_scrape(
         raise RuntimeError(f"Decodo API error: {error_message}")
 
     return response.json()  # type: ignore[no-any-return]
+
+
+def _is_failed(entry: dict[str, Any]) -> bool:
+    """Return whether a result entry carries a failed (4xx/5xx or 6xx) status."""
+    status = entry.get("status_code")
+    return isinstance(status, int) and status >= 400
 
 
 def _extract_content(response: dict[str, Any]) -> str:
@@ -225,7 +229,7 @@ class DecodoWebScrapeTool(BaseTool):
         "automatically. Use this when you need the complete text of a specific URL. "
         "Input: a valid URL string (must include http:// or https://)."
     )
-    args_schema: Type[BaseModel] = _WebScrapeInput
+    args_schema: type[BaseModel] = _WebScrapeInput
 
     decodo_api_token: SecretStr = Field(
         default=SecretStr(""),
@@ -267,7 +271,7 @@ class DecodoWebScrapeTool(BaseTool):
     def _run(
         self,
         url: str,
-        run_manager: Optional[CallbackManagerForToolRun] = None,
+        run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Scrape the given URL and return its content.
 
@@ -289,7 +293,11 @@ class DecodoWebScrapeTool(BaseTool):
                 "field or the ``DECODO_API_TOKEN`` environment variable."
             )
 
-        payload: dict[str, Any] = {"target": "universal", "url": url}
+        payload: dict[str, Any] = {
+            "target": "universal",
+            "url": url,
+            "markdown": True,
+        }
         response = _do_scrape(token, self.base_url, payload, auth_mode=self.auth_mode)
         content = _extract_content(response)
         return content if content else "(No content returned by Decodo API)"
@@ -344,7 +352,7 @@ class DecodoSearchTool(BaseTool):
         "'num_results' (optional: integer 1-100; default 10). "
         "Use 'amazon' to search for products, 'reddit' for community discussions."
     )
-    args_schema: Type[BaseModel] = _SearchInput
+    args_schema: type[BaseModel] = _SearchInput
 
     decodo_api_token: SecretStr = Field(
         default=SecretStr(""),
@@ -388,7 +396,7 @@ class DecodoSearchTool(BaseTool):
         query: str,
         engine: str = "google",
         num_results: int = 10,
-        run_manager: Optional[CallbackManagerForToolRun] = None,
+        run_manager: CallbackManagerForToolRun | None = None,
     ) -> str:
         """Execute a search and return results as a JSON string.
 
@@ -417,20 +425,25 @@ class DecodoSearchTool(BaseTool):
         target = _ENGINE_TARGET_MAP.get(engine, "google_search")
 
         # Prepend Reddit site filter when using the reddit pseudo-engine.
-        effective_query = (
-            f"{_REDDIT_SITE_FILTER} {query}" if engine == "reddit" else query
-        )
+        effective_query = f"{_REDDIT_SITE_FILTER} {query}" if engine == "reddit" else query
 
         payload: dict[str, Any] = {
             "target": target,
             "query": effective_query,
             "limit": num_results,
+            "parse": True,
         }
 
-        response = _do_scrape(
-            token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode
-        )
+        response = _do_scrape(token, _DEFAULT_BASE_URL, payload, auth_mode=self.auth_mode)
         results = response.get("results", [])
+
+        # A failed scrape comes back as HTTP 200, either with a failed status
+        # inside `results` or with no `results` at all (e.g. status 613). Raise
+        # so agents can retry instead of reading it as "no results".
+        if not results or all(_is_failed(entry) for entry in results):
+            status = results[0].get("status_code") if results else response.get("status_code")
+            message = response.get("message") or "no results returned"
+            raise RuntimeError(f"Decodo search failed (status {status}): {message}")
 
         serialisable = []
         for entry in results:
