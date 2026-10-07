@@ -11,7 +11,7 @@ Two authentication modes are supported via ``auth_mode``:
 
 * ``"basic"`` *(default)* — username:password credentials encoded as a Basic
   auth token.  Uses the ``/v2/scrape`` endpoint.
-* ``"token"`` — a plain API token.  Uses the ``/unified/v1/scrape`` endpoint.
+* ``"token"`` — an API key.  Uses the ``/unified/v1/scrape`` endpoint.
 
 Typical usage — basic auth (default)::
 
@@ -27,7 +27,7 @@ Typical usage — token auth::
 
     loader = DecodoLoader(
         urls=["https://example.com"],
-        api_token="your-api-token",
+        api_token="your-api-key",
         auth_mode="token",
     )
     docs = loader.load()
@@ -69,7 +69,7 @@ def _build_headers(token: str) -> dict[str, str]:
     Args:
         token: Raw token string. For ``"basic"`` auth this is the
             base64-encoded ``username:password`` value; for ``"token"`` auth
-            this is the plain API token.
+            this is the API key.
 
     Returns:
         Dictionary of HTTP headers including ``Authorization``.
@@ -95,7 +95,7 @@ def _scrape_url(
         url: Full URL to scrape (must include scheme).
         timeout: Request timeout in seconds.
         auth_mode: ``"basic"`` (username:password, ``/v2/scrape``) or
-            ``"token"`` (API token, ``/unified/v1/scrape``).
+            ``"token"`` (API key, ``/unified/v1/scrape``).
 
     Returns:
         Parsed JSON response from the Decodo API.
@@ -170,13 +170,13 @@ class DecodoLoader(BaseLoader):
         urls: A single URL string or a list of URL strings to scrape.
         api_token: Credential value. For ``"basic"`` auth (default) this is
             the base64-encoded ``username:password`` string; for ``"token"``
-            auth this is the plain API token. Falls back to the
+            auth this is the API key. Falls back to the
             ``DECODO_API_TOKEN`` environment variable when omitted.
         auth_mode: Authentication mode.
 
             * ``"basic"`` *(default)* — username:password credentials,
               uses ``/v2/scrape``.
-            * ``"token"`` — plain API token, uses ``/unified/v1/scrape``.
+            * ``"token"`` — API key, uses ``/unified/v1/scrape``.
 
         timeout: HTTP request timeout in seconds (default 180).
         continue_on_error: When ``True`` (default), skip URLs that fail and
@@ -191,11 +191,11 @@ class DecodoLoader(BaseLoader):
         )
         docs = loader.load()
 
-    Example — token auth::
+    Example — API key auth::
 
         loader = DecodoLoader(
             urls=["https://example.com", "https://example.org"],
-            api_token="your-api-token",
+            api_token="your-api-key",
             auth_mode="token",
         )
         docs = loader.load()
@@ -217,7 +217,7 @@ class DecodoLoader(BaseLoader):
         raw_token = api_token or os.environ.get("DECODO_API_TOKEN", "")
         if not raw_token:
             raise ValueError(
-                "Decodo API token is required. Provide it via the ``api_token`` "
+                "Decodo API key or token is required. Provide it via the ``api_token`` "
                 "argument or the ``DECODO_API_TOKEN`` environment variable."
             )
         self._token: SecretStr = SecretStr(raw_token)

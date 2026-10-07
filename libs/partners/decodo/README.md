@@ -14,22 +14,20 @@ pip install langchain-decodo
 
 ## Authentication
 
-All classes read your Decodo API token from the `DECODO_API_TOKEN` environment
-variable, or you can pass it explicitly.
+Use the Web Data API key from your Web Data API subscription on the
+[Decodo Dashboard](https://dashboard.decodo.com/web-data/playground). All classes read it from the `DECODO_API_TOKEN` environment variable, or you can pass it explicitly. Pass `auth_mode="token"` so the key is sent as a Bearer token:
 
 ```bash
-export DECODO_API_TOKEN="your-decodo-api-token"
+export DECODO_API_TOKEN="your-decodo-api-key"
 ```
-
-Get a token from the [Decodo Dashboard](https://app.decodo.com).
-
-By default every class expects basic credentials (base64-encoded
-`username:password`). If your token is a plain API token, pass
-`auth_mode="token"`.:
 
 ```python
 tool = DecodoWebScrapeTool(auth_mode="token")
 ```
+
+Older plans only have a basic authentication token (base64-encoded
+`username:password`). That is the default `auth_mode="basic"`, so omit
+`auth_mode` and export the basic token as `DECODO_API_TOKEN`.
 
 ## Components
 
@@ -41,7 +39,7 @@ Handles JavaScript rendering, CAPTCHAs, and geo-blocking automatically.
 ```python
 from langchain_decodo import DecodoWebScrapeTool
 
-tool = DecodoWebScrapeTool()  # reads DECODO_API_TOKEN from env
+tool = DecodoWebScrapeTool(auth_mode="token")  # reads DECODO_API_TOKEN from env
 content = tool.run("https://example.com")
 print(content)
 ```
@@ -52,7 +50,10 @@ Pass explicitly:
 from pydantic import SecretStr
 from langchain_decodo import DecodoWebScrapeTool
 
-tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("YOUR_TOKEN"))
+tool = DecodoWebScrapeTool(
+    decodo_api_token=SecretStr("YOUR_API_KEY"),
+    auth_mode="token",
+)
 ```
 
 ### `DecodoSearchTool`
@@ -62,7 +63,7 @@ Search Google, Amazon, or Reddit and return structured JSON results.
 ```python
 from langchain_decodo import DecodoSearchTool
 
-tool = DecodoSearchTool()
+tool = DecodoSearchTool(auth_mode="token")
 
 # Google search (default)
 results = tool.run({"query": "LangChain latest release", "engine": "google"})
@@ -97,6 +98,7 @@ loader = DecodoLoader(
         "https://python.org/about/",
         "https://docs.python.org/3/whatsnew/3.12.html",
     ],
+    auth_mode="token",
 )
 docs = loader.load()
 
@@ -123,7 +125,10 @@ from langchain_decodo import DecodoSearchTool, DecodoWebScrapeTool
 
 agent = create_agent(
     model="openai:gpt-4o-mini",
-    tools=[DecodoWebScrapeTool(), DecodoSearchTool()],
+    tools=[
+        DecodoWebScrapeTool(auth_mode="token"),
+        DecodoSearchTool(auth_mode="token"),
+    ],
 )
 
 result = agent.invoke(
@@ -151,7 +156,7 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_decodo import DecodoLoader
 
-docs = DecodoLoader(urls=["https://python.org/about/"]).load()
+docs = DecodoLoader(urls=["https://python.org/about/"], auth_mode="token").load()
 
 splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
 chunks = splitter.split_documents(docs)
@@ -172,5 +177,5 @@ print(answer.content)
 
 - [Decodo website](https://decodo.com)
 - [Decodo API documentation](https://help.decodo.com)
-- [Decodo Dashboard](https://app.decodo.com)
+- [Decodo Dashboard](https://dashboard.decodo.com/)
 - [LangChain documentation](https://python.langchain.com)
