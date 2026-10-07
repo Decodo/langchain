@@ -15,7 +15,7 @@ pip install langchain-decodo
 ## Authentication
 
 Use the Web Data API key from your Web Data API subscription on the
-[Decodo Dashboard](https://dashboard.decodo.com/web-data/playground). All classes read it from the `DECODO_API_TOKEN` environment variable, or you can pass it explicitly. Pass `auth_mode="token"` so the key is sent as a Bearer token:
+[Decodo Dashboard](https://dashboard.decodo.com/web-data/playground). All classes read it from the `DECODO_API_TOKEN` environment variable, or you can pass it explicitly. Pass `auth_mode="token"` when using the key:
 
 ```bash
 export DECODO_API_TOKEN="your-decodo-api-key"
