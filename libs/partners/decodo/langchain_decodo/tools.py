@@ -72,7 +72,7 @@ def _build_headers(token: str) -> dict[str, str]:
         "Authorization": f"Basic {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "x-integration": "langchain",
+        "x-integration": "langchain-python",
     }
 
 
