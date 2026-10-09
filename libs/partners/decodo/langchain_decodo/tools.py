@@ -11,7 +11,7 @@ Both tools support two authentication modes selected via ``auth_mode``:
 
 * ``"basic"`` *(default)* — username:password credentials encoded as a Basic
   auth token.  Uses the ``/v2/scrape`` endpoint.
-* ``"token"`` — a plain API token.  Uses the ``/unified/v1/scrape`` endpoint.
+* ``"token"`` — an API key.  Uses the ``/unified/v1/scrape`` endpoint.
 
 In both modes the ``Authorization: Basic <value>`` header is used; only the
 value and the target endpoint differ.
@@ -63,7 +63,7 @@ def _build_headers(token: str) -> dict[str, str]:
     Args:
         token: Raw token string. For ``"basic"`` auth this is the
             base64-encoded ``username:password`` value; for ``"token"`` auth
-            this is the plain API token.
+            this is the API key.
 
     Returns:
         Dictionary of HTTP headers including ``Authorization``.
@@ -90,7 +90,7 @@ def _do_scrape(
         base_url: Base URL of the Decodo API.
         payload: Request body to send as JSON.
         auth_mode: ``"basic"`` (username:password, ``/v2/scrape``) or
-            ``"token"`` (API token, ``/unified/v1/scrape``).
+            ``"token"`` (API key, ``/unified/v1/scrape``).
         timeout: Request timeout in seconds.
 
     Returns:
@@ -191,7 +191,7 @@ class DecodoWebScrapeTool(BaseTool):
     * ``"basic"`` *(default)* — supply the base64-encoded
       ``username:password`` string as ``decodo_api_token`` (or set
       ``DECODO_API_TOKEN``).  Requests go to ``/v2/scrape``.
-    * ``"token"`` — supply a plain API token as ``decodo_api_token`` (or set
+    * ``"token"`` — supply an API key as ``decodo_api_token`` (or set
       ``DECODO_API_TOKEN``).  Requests go to ``/unified/v1/scrape``.
 
     Both modes send ``Authorization: Basic <value>``; the value and endpoint
@@ -200,7 +200,7 @@ class DecodoWebScrapeTool(BaseTool):
     Attributes:
         decodo_api_token: Credential value. For ``"basic"`` mode this is the
             base64-encoded ``username:password``; for ``"token"`` mode this is
-            the plain API token. Falls back to the ``DECODO_API_TOKEN``
+            the API key. Falls back to the ``DECODO_API_TOKEN``
             environment variable when not provided explicitly.
         auth_mode: Authentication mode — ``"basic"`` (default) or ``"token"``.
         base_url: Base URL of the Decodo Scraper API.
@@ -212,10 +212,10 @@ class DecodoWebScrapeTool(BaseTool):
         tool = DecodoWebScrapeTool(decodo_api_token="base64(user:pass)")
         result = tool.run("https://example.com")
 
-    Example — token auth::
+    Example — API key auth::
 
         tool = DecodoWebScrapeTool(
-            decodo_api_token="your-api-token",
+            decodo_api_token="your-api-key",
             auth_mode="token",
         )
         result = tool.run("https://example.com")
@@ -235,7 +235,7 @@ class DecodoWebScrapeTool(BaseTool):
         default=SecretStr(""),
         description=(
             "Credential value. For 'basic' auth: base64-encoded username:password. "
-            "For 'token' auth: plain API token. "
+            "For 'token' auth: API key. "
             "Falls back to the DECODO_API_TOKEN environment variable."
         ),
     )
@@ -244,7 +244,7 @@ class DecodoWebScrapeTool(BaseTool):
         description=(
             "Authentication mode. "
             "'basic' (default): username:password credentials, uses /v2/scrape. "
-            "'token': plain API token, uses /unified/v1/scrape."
+            "'token': API key, uses /unified/v1/scrape."
         ),
     )
     base_url: str = Field(
@@ -283,13 +283,13 @@ class DecodoWebScrapeTool(BaseTool):
             Page content as a string (markdown or plain text).
 
         Raises:
-            ValueError: If no API token is configured.
+            ValueError: If no API key or token is configured.
             RuntimeError: On API errors or network failures.
         """
         token = self.decodo_api_token.get_secret_value()
         if not token:
             raise ValueError(
-                "Decodo API token is required. Set it via the ``decodo_api_token`` "
+                "Decodo API key or token is required. Set it via the ``decodo_api_token`` "
                 "field or the ``DECODO_API_TOKEN`` environment variable."
             )
 
@@ -317,7 +317,7 @@ class DecodoSearchTool(BaseTool):
     * ``"basic"`` *(default)* — supply the base64-encoded
       ``username:password`` string as ``decodo_api_token`` (or set
       ``DECODO_API_TOKEN``).  Requests go to ``/v2/scrape``.
-    * ``"token"`` — supply a plain API token as ``decodo_api_token`` (or set
+    * ``"token"`` — supply an API key as ``decodo_api_token`` (or set
       ``DECODO_API_TOKEN``).  Requests go to ``/unified/v1/scrape``.
 
     Attributes:
@@ -332,10 +332,10 @@ class DecodoSearchTool(BaseTool):
         tool = DecodoSearchTool(decodo_api_token="base64(user:pass)")
         results = tool.run({"query": "best Python web scraping libraries"})
 
-    Example — token auth::
+    Example — API key auth::
 
         tool = DecodoSearchTool(
-            decodo_api_token="your-api-token",
+            decodo_api_token="your-api-key",
             auth_mode="token",
         )
         results = tool.run({"query": "best Python web scraping libraries"})
@@ -358,7 +358,7 @@ class DecodoSearchTool(BaseTool):
         default=SecretStr(""),
         description=(
             "Credential value. For 'basic' auth: base64-encoded username:password. "
-            "For 'token' auth: plain API token. "
+            "For 'token' auth: API key. "
             "Falls back to the DECODO_API_TOKEN environment variable."
         ),
     )
@@ -367,7 +367,7 @@ class DecodoSearchTool(BaseTool):
         description=(
             "Authentication mode. "
             "'basic' (default): username:password credentials, uses /v2/scrape. "
-            "'token': plain API token, uses /unified/v1/scrape."
+            "'token': API key, uses /unified/v1/scrape."
         ),
     )
     engine: str = Field(
@@ -411,13 +411,13 @@ class DecodoSearchTool(BaseTool):
             ``status_code``, and ``url`` fields.
 
         Raises:
-            ValueError: If no API token is configured.
+            ValueError: If no API key or token is configured.
             RuntimeError: On API errors or network failures.
         """
         token = self.decodo_api_token.get_secret_value()
         if not token:
             raise ValueError(
-                "Decodo API token is required. Set it via the ``decodo_api_token`` "
+                "Decodo API key or token is required. Set it via the ``decodo_api_token`` "
                 "field or the ``DECODO_API_TOKEN`` environment variable."
             )
 

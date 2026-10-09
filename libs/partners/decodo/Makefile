@@ -43,4 +43,4 @@ help:
 	@echo 'lint                         - run linters'
 	@echo 'format                       - run formatters'
 	@echo 'tests                        - run unit tests'
-	@echo 'integration_tests            - run integration tests (requires DECODO_API_TOKEN)'
+	@echo 'integration_tests            - run integration tests (requires an API key in DECODO_API_TOKEN)'

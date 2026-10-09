@@ -80,7 +80,7 @@ class TestDecodoWebScrapeToolInit:
     def test_missing_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DECODO_API_TOKEN", raising=False)
         tool = DecodoWebScrapeTool()
-        with pytest.raises(ValueError, match="Decodo API token"):
+        with pytest.raises(ValueError, match="Decodo API key or token"):
             tool._run("https://example.com")
 
 
@@ -184,7 +184,7 @@ class TestDecodoSearchToolInit:
     def test_missing_token_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("DECODO_API_TOKEN", raising=False)
         tool = DecodoSearchTool()
-        with pytest.raises(ValueError, match="Decodo API token"):
+        with pytest.raises(ValueError, match="Decodo API key or token"):
             tool._run("python web scraping")
 
 

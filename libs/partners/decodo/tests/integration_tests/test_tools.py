@@ -1,8 +1,9 @@
 """Integration tests for langchain_decodo tools.
 
-Run with a real DECODO_API_TOKEN set:
+Run with a real Decodo API key in DECODO_API_TOKEN (a basic auth token from an older
+plan needs `auth_mode="basic"` in the constructors below):
 
-    DECODO_API_TOKEN=your_token pytest tests/integration_tests/
+    DECODO_API_TOKEN=your_api_key pytest tests/integration_tests/
 
 All tests are skipped automatically when ``DECODO_API_TOKEN`` is not set in
 the environment, so this file is safe to include in CI without secrets.
@@ -16,10 +17,10 @@ from typing import Any
 
 import pytest
 
-# Skip the entire module if no token is configured.
+# Skip the entire module if no credential is configured.
 pytestmark = pytest.mark.skipif(
     not os.environ.get("DECODO_API_TOKEN"),
-    reason="DECODO_API_TOKEN environment variable is not set",
+    reason="DECODO_API_TOKEN environment variable (API key) is not set",
 )
 
 
@@ -27,21 +28,21 @@ pytestmark = pytest.mark.skipif(
 def scrape_tool() -> Any:
     from langchain_decodo.tools import DecodoWebScrapeTool
 
-    return DecodoWebScrapeTool()
+    return DecodoWebScrapeTool(auth_mode="token")
 
 
 @pytest.fixture()
 def search_tool() -> Any:
     from langchain_decodo.tools import DecodoSearchTool
 
-    return DecodoSearchTool()
+    return DecodoSearchTool(auth_mode="token")
 
 
 @pytest.fixture()
 def loader() -> Any:
     from langchain_decodo import DecodoLoader
 
-    return DecodoLoader(urls=["https://example.com"])
+    return DecodoLoader(urls=["https://example.com"], auth_mode="token")
 
 
 # ---------------------------------------------------------------------------
@@ -115,7 +116,7 @@ class TestDecodoLoaderIntegration:
 
         from langchain_decodo import DecodoLoader
 
-        loader = DecodoLoader(urls="https://example.com")
+        loader = DecodoLoader(urls="https://example.com", auth_mode="token")
         docs = loader.load()
         assert isinstance(docs, list)
         assert len(docs) > 0
@@ -129,7 +130,7 @@ class TestDecodoLoaderIntegration:
 
         from langchain_decodo import DecodoLoader
 
-        loader = DecodoLoader(urls=["https://example.com"])
+        loader = DecodoLoader(urls=["https://example.com"], auth_mode="token")
         docs = list(loader.lazy_load())
         assert all(isinstance(d, Document) for d in docs)
 
@@ -138,6 +139,7 @@ class TestDecodoLoaderIntegration:
 
         loader = DecodoLoader(
             urls=["https://this-domain-definitely-does-not-exist-xyz123.com"],
+            auth_mode="token",
             continue_on_error=True,
         )
         docs = loader.load()
