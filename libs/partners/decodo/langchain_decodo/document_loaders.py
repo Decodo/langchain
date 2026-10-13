@@ -10,8 +10,10 @@ target to fetch their content. Each URL is yielded as a
 Two authentication modes are supported via ``auth_mode``:
 
 * ``"basic"`` *(default)* — username:password credentials encoded as a Basic
-  auth token.  Uses the ``/v2/scrape`` endpoint.
-* ``"token"`` — an API key.  Uses the ``/unified/v1/scrape`` endpoint.
+  auth token, sent as ``Authorization: Basic <token>`` to
+  ``https://scraper-api.decodo.com/v2/scrape``.
+* ``"token"`` — an API key, sent as ``Authorization: Bearer <key>`` to
+  ``https://data.decodo.com/v1/scrape``.
 
 Typical usage — basic auth (default)::
 
@@ -45,37 +47,40 @@ from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 from pydantic import SecretStr
 
-_API_BASE = "https://scraper-api.decodo.com"
-_V2_SCRAPE_PATH = "/v2/scrape"
-_UNIFIED_SCRAPE_PATH = "/unified/v1/scrape"
+# API keys and basic auth tokens are only accepted on their own host.
+_BASIC_SCRAPE_ENDPOINT = "https://scraper-api.decodo.com/v2/scrape"
+_TOKEN_SCRAPE_ENDPOINT = "https://data.decodo.com/v1/scrape"
 _DEFAULT_TIMEOUT = 180.0
 
 
-def _scrape_path(auth_mode: str) -> str:
-    """Return the API path for the given auth mode.
+def _scrape_endpoint(auth_mode: str) -> str:
+    """Return the scrape endpoint URL for the given auth mode.
 
     Args:
         auth_mode: Either ``"basic"`` or ``"token"``.
 
     Returns:
-        The URL path string for the scrape endpoint.
+        The scrape endpoint URL.
     """
-    return _UNIFIED_SCRAPE_PATH if auth_mode == "token" else _V2_SCRAPE_PATH
+    return _TOKEN_SCRAPE_ENDPOINT if auth_mode == "token" else _BASIC_SCRAPE_ENDPOINT
 
 
-def _build_headers(token: str) -> dict[str, str]:
+def _build_headers(token: str, auth_mode: str) -> dict[str, str]:
     """Build HTTP headers for a Decodo API request.
 
     Args:
         token: Raw token string. For ``"basic"`` auth this is the
             base64-encoded ``username:password`` value; for ``"token"`` auth
             this is the API key.
+        auth_mode: Either ``"basic"`` or ``"token"``; selects the
+            ``Authorization`` scheme.
 
     Returns:
         Dictionary of HTTP headers including ``Authorization``.
     """
+    scheme = "Bearer" if auth_mode == "token" else "Basic"
     return {
-        "Authorization": f"Basic {token}",
+        "Authorization": f"{scheme} {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
         "x-integration": "langchain-python",
@@ -94,8 +99,8 @@ def _scrape_url(
         token: Raw token string (format depends on ``auth_mode``).
         url: Full URL to scrape (must include scheme).
         timeout: Request timeout in seconds.
-        auth_mode: ``"basic"`` (username:password, ``/v2/scrape``) or
-            ``"token"`` (API key, ``/unified/v1/scrape``).
+        auth_mode: ``"basic"`` (username:password, ``scraper-api.decodo.com``)
+            or ``"token"`` (API key, ``data.decodo.com``).
 
     Returns:
         Parsed JSON response from the Decodo API.
@@ -103,7 +108,7 @@ def _scrape_url(
     Raises:
         RuntimeError: On timeout, network error, or non-2xx HTTP response.
     """
-    endpoint = f"{_API_BASE}{_scrape_path(auth_mode)}"
+    endpoint = _scrape_endpoint(auth_mode)
     payload: dict[str, Any] = {
         "target": "universal",
         "url": url,
@@ -113,7 +118,7 @@ def _scrape_url(
     try:
         response = httpx.post(
             endpoint,
-            headers=_build_headers(token),
+            headers=_build_headers(token, auth_mode),
             json=payload,
             timeout=timeout,
         )
@@ -175,8 +180,8 @@ class DecodoLoader(BaseLoader):
         auth_mode: Authentication mode.
 
             * ``"basic"`` *(default)* — username:password credentials,
-              uses ``/v2/scrape``.
-            * ``"token"`` — API key, uses ``/unified/v1/scrape``.
+              uses ``https://scraper-api.decodo.com/v2/scrape``.
+            * ``"token"`` — API key, uses ``https://data.decodo.com/v1/scrape``.
 
         timeout: HTTP request timeout in seconds (default 180).
         continue_on_error: When ``True`` (default), skip URLs that fail and

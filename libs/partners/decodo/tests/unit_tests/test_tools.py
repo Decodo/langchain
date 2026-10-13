@@ -7,7 +7,7 @@ All tests run without any network access — httpx calls are mocked via
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -68,7 +68,7 @@ class TestDecodoWebScrapeToolInit:
 
     def test_default_base_url(self) -> None:
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("x"))
-        assert tool.base_url == "https://scraper-api.decodo.com"
+        assert tool.base_url is None
 
     def test_custom_base_url(self) -> None:
         tool = DecodoWebScrapeTool(
@@ -350,41 +350,56 @@ class TestAuthMode:
     """Verify that auth_mode controls which endpoint is called."""
 
     @patch("langchain_decodo.tools.httpx.post")
-    def test_scrape_basic_mode_uses_v2_endpoint(self, mock_post: MagicMock) -> None:
+    def test_scrape_basic_mode_uses_scraper_api(self, mock_post: MagicMock) -> None:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("tok"), auth_mode="basic")
         tool._run("https://example.com")
 
-        url_called = mock_post.call_args[0][0]
-        assert "/v2/scrape" in url_called
-        assert "/unified/" not in url_called
+        assert mock_post.call_args[0][0] == "https://scraper-api.decodo.com/v2/scrape"
 
     @patch("langchain_decodo.tools.httpx.post")
-    def test_scrape_token_mode_uses_unified_endpoint(self, mock_post: MagicMock) -> None:
+    def test_scrape_token_mode_uses_data_api(self, mock_post: MagicMock) -> None:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("tok"), auth_mode="token")
         tool._run("https://example.com")
 
-        url_called = mock_post.call_args[0][0]
-        assert "/unified/v1/scrape" in url_called
+        assert mock_post.call_args[0][0] == "https://data.decodo.com/v1/scrape"
+
+    @pytest.mark.parametrize(
+        ("mode", "expected"),
+        [
+            ("basic", "https://custom.example.com/v2/scrape"),
+            ("token", "https://custom.example.com/v1/scrape"),
+        ],
+    )
+    @patch("langchain_decodo.tools.httpx.post")
+    def test_scrape_custom_base_url_keeps_mode_path(
+        self, mock_post: MagicMock, mode: Literal["basic", "token"], expected: str
+    ) -> None:
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
+        tool = DecodoWebScrapeTool(
+            decodo_api_token=SecretStr("tok"),
+            auth_mode=mode,
+            base_url="https://custom.example.com",
+        )
+        tool._run("https://example.com")
+        assert mock_post.call_args[0][0] == expected
 
     @patch("langchain_decodo.tools.httpx.post")
-    def test_search_basic_mode_uses_v2_endpoint(self, mock_post: MagicMock) -> None:
+    def test_search_basic_mode_uses_scraper_api(self, mock_post: MagicMock) -> None:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"), auth_mode="basic")
         tool._run("query")
 
-        url_called = mock_post.call_args[0][0]
-        assert "/v2/scrape" in url_called
+        assert mock_post.call_args[0][0] == "https://scraper-api.decodo.com/v2/scrape"
 
     @patch("langchain_decodo.tools.httpx.post")
-    def test_search_token_mode_uses_unified_endpoint(self, mock_post: MagicMock) -> None:
+    def test_search_token_mode_uses_data_api(self, mock_post: MagicMock) -> None:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
         tool = DecodoSearchTool(decodo_api_token=SecretStr("tok"), auth_mode="token")
         tool._run("query")
 
-        url_called = mock_post.call_args[0][0]
-        assert "/unified/v1/scrape" in url_called
+        assert mock_post.call_args[0][0] == "https://data.decodo.com/v1/scrape"
 
     def test_default_auth_mode_is_basic(self) -> None:
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("tok"))
@@ -394,15 +409,25 @@ class TestAuthMode:
         tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("tok"), auth_mode="token")
         assert tool.auth_mode == "token"
 
+    @pytest.mark.parametrize(
+        ("mode", "expected"),
+        [("basic", "Basic mytoken"), ("token", "Bearer mytoken")],
+    )
     @patch("langchain_decodo.tools.httpx.post")
-    def test_auth_header_same_regardless_of_mode(self, mock_post: MagicMock) -> None:
-        """Authorization header format is identical for both modes."""
+    def test_auth_header_scheme_follows_mode(
+        self, mock_post: MagicMock, mode: Literal["basic", "token"], expected: str
+    ) -> None:
         mock_post.return_value = _make_mock_httpx_response(_make_api_response())
-        for mode in ("basic", "token"):
-            tool = DecodoWebScrapeTool(
-                decodo_api_token=SecretStr("mytoken"),
-                auth_mode=mode,
-            )
-            tool._run("https://example.com")
-            _, kwargs = mock_post.call_args
-            assert kwargs["headers"]["Authorization"] == "Basic mytoken"
+        tool = DecodoWebScrapeTool(decodo_api_token=SecretStr("mytoken"), auth_mode=mode)
+        tool._run("https://example.com")
+        _, kwargs = mock_post.call_args
+        assert kwargs["headers"]["Authorization"] == expected
+
+    @patch("langchain_decodo.tools.httpx.post")
+    def test_search_token_mode_sends_bearer(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = _make_mock_httpx_response(_make_api_response())
+        tool = DecodoSearchTool(decodo_api_token=SecretStr("key"), auth_mode="token")
+        tool._run("query")
+
+        _, kwargs = mock_post.call_args
+        assert kwargs["headers"]["Authorization"] == "Bearer key"
