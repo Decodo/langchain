@@ -290,37 +290,9 @@ The `echo y |` pipe is required when `--data-dir` is outside the `libs/model-pro
 
 ### Release process
 
-Each partner package is released independently. The full flow is:
+`langchain-decodo` (`libs/partners/decodo`) is the only package released from this repo, and releases are automated by `.github/workflows/publish.yml`. Merging to `master` publishes a new version based on the PR title, which must follow [Conventional Commits](https://www.conventionalcommits.org): `fix:` → patch, `feat:` → minor, `feat!:` or a `BREAKING CHANGE:` footer → major. `chore:`, `docs:`, `ci:`, `refactor:`, `test:` don't release, and neither do changes outside `libs/partners/decodo`.
 
-1. **Version bump PR.** Create a PR that bumps three files by one line each:
-   - `langchain_<partner>/_version.py` — `__version__`
-   - `pyproject.toml` — `version`
-   - `uv.lock` — run `uv lock` from the package directory. If the diff includes unrelated changes (e.g. environment-dependent marker lines from a different local Python version), revert them and keep only the `version = "..."` line for the package being released
-
-   Title follows Conventional Commits: `release(<partner>): <version>` (e.g. `release(openrouter): 0.2.6`). Use the branch name `release/<partner>-<version>`.
-
-   Patch vs. minor bump follows in-repo precedent: within a `0.x` series, fixes and additive features get a patch bump (e.g. `session_id` field → 0.2.1→0.2.2, `parallel_tool_calls` → 0.2.3→0.2.4).
-
-2. **Merge the PR** to `master`.
-
-3. **Trigger the release workflow.** Run `gh workflow run` against the "🚀 Package Release" workflow (`_release.yml`, file ID `63880841`):
-
-   ```bash
-   gh workflow run 63880841 --repo langchain-ai/langchain \
-     -f working-directory=<partner> -f release-version=<version>
-   ```
-
-   `working-directory` is the short partner name from the workflow's dropdown (e.g. `openrouter`, not `libs/partners/openrouter`).
-
-4. **The workflow handles everything else automatically** — do **not** create a GitHub release or tag manually. The `mark-release` job (using `ncipollo/release-action`) creates the GitHub release, tag, and release notes after PyPI publish succeeds. The release notes body is auto-generated from commit history between the previous tag and HEAD.
-
-   Monitor the run:
-
-   ```bash
-   gh run view <run-id> --repo langchain-ai/langchain
-   ```
-
-   The full job chain is: build → release-notes → pre-release-checks → TestPyPI publish → PyPI publish → tag GitHub release.
+Don't edit the version in `pyproject.toml` or `_version.py`, and don't create tags or GitHub releases by hand. Both version fields stay at `0.0.0`; the workflow computes the next version from the latest `vX.Y.Z` tag, tags it, creates the GitHub release with generated notes, and publishes to PyPI.
 
 ### PR labeling and linting
 

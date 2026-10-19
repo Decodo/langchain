@@ -4,29 +4,74 @@ on:
   push:
     branches:
       - master
+    paths:
+      - "libs/partners/decodo/**"
+      - ".github/workflows/publish.yml"
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  UV_FROZEN: "true"
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: write
       id-token: write
-      contents: read
+    defaults:
+      run:
+        working-directory: libs/partners/decodo
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
 
-      - uses: actions/setup-python@v5
+      # PSR needs a checked-out branch, not a detached HEAD, to match
+      # `branches.master`. Resetting to the triggering SHA keeps a push that
+      # landed in the meantime out of this release.
+      - run: git reset --hard ${{ github.sha }}
+
+      - uses: "./.github/actions/uv_setup"
         with:
           python-version: "3.12"
+          cache-suffix: publish-libs/partners/decodo
+          working-directory: libs/partners/decodo
+
+      - name: Install dependencies
+        run: uv sync --group lint --group typing --group test --group test_integration
+
+      - name: Lint
+        run: |
+          make lint_package
+          make lint_tests
+
+      - name: Test
+        run: make test PYTEST_EXTRA=-q
+
+      - name: Release
+        id: release
+        uses: python-semantic-release/python-semantic-release@b700dbeb1f431a0fcc30a79f3f0869407fe07278 # v10.7.0
+        with:
+          directory: libs/partners/decodo
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          commit: "false"
+          changelog: "false"
 
       - name: Build
-        working-directory: libs/partners/decodo
-        run: |
-          pip install build
-          python -m build
+        if: steps.release.outputs.released == 'true'
+        run: uv build
 
       - name: Publish
-        uses: pypa/gh-action-pypi-publish@release/v1
+        if: steps.release.outputs.released == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: libs/partners/decodo/dist/
