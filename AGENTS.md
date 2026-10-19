@@ -294,20 +294,13 @@ The `echo y |` pipe is required when `--data-dir` is outside the `libs/model-pro
 
 Don't edit the version in `pyproject.toml` or `_version.py`, and don't create tags or GitHub releases by hand. Both version fields stay at `0.0.0`; the workflow computes the next version from the latest `vX.Y.Z` tag, tags it, creates the GitHub release with generated notes, and publishes to PyPI.
 
-### PR labeling and linting
+### PR title linting
 
-**Title linting** (`.github/workflows/pr_lint.yml`)
-
-**Auto-labeling:**
-
-- `.github/workflows/pr_labeler.yml` – Unified PR labeler (size, file, title, external/internal, contributor tier)
-- `.github/workflows/pr_labeler_backfill.yml` – Manual backfill of PR labels on open PRs
-- `.github/workflows/auto-label-by-package.yml` – Issue labeling by package
-- `.github/workflows/tag-external-issues.yml` – Issue external/internal classification
+`.github/workflows/pr_lint.yml` checks that PR titles follow Conventional Commits.
 
 ### Integration test tracing (LangSmith)
 
-Scheduled and manually dispatched integration tests (`integration_tests.yml`) trace every run to LangSmith so failures link back to the originating Actions run. (`_release.yml` runs integration tests too, but does not currently configure LangSmith tracing.)
+Scheduled and manually dispatched integration tests (`integration_tests.yml`) trace every run to LangSmith so failures link back to the originating Actions run.
 
 **Env vars set by CI:**
 
@@ -327,9 +320,6 @@ When adding a new partner package, update these files:
 
 - `.github/ISSUE_TEMPLATE/*.yml` – Add to package dropdown
 - `.github/dependabot.yml` – Add dependency update entry
-- `.github/scripts/pr-labeler-config.json` – Add file rule and scope-to-label mapping
-- `.github/workflows/_release.yml` – Add API key secrets if needed
-- `.github/workflows/auto-label-by-package.yml` – Add package label
 - `.github/workflows/check_diffs.yml` – Add to change detection
 - `.github/workflows/integration_tests.yml` – Add integration test config
 - `.github/workflows/pr_lint.yml` – Add to allowed scopes
