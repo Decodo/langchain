@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "langchain-decodo"
-version = "0.1.4"
+version = "0.0.0"
 description = "LangChain integration for the Decodo web scraping API"
 readme = "README.md"
 license = { text = "MIT" }
@@ -59,3 +59,20 @@ strict = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["langchain_decodo/_version.py:__version__"]
+commit_parser = "conventional-monorepo"
+allow_zero_version = true
+
+[tool.semantic_release.commit_parser_options]
+# Same types as .github/workflows/pr_lint.yml; PSR ignores commits of any type left out.
+allowed_tags = [
+    "feat", "fix", "docs", "style", "refactor", "perf", "test", "build", "ci", "chore", "revert",
+    "release", "hotfix",
+]
+patch_tags = ["fix", "perf", "hotfix"]
+
+[tool.semantic_release.branches.master]
+match = "master"
