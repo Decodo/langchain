@@ -49,6 +49,8 @@ _DEFAULT_CRAWL_TIMEOUT = 600.0  # seconds
 # The API rejects a `max_duration` above 4 hours.
 _MAX_DURATION_CEILING = 4 * 60 * 60  # seconds
 _CRAWL_STATUS_LINK = re.compile(r"/v1/crawl/([^/?#]+)/status$")
+# The SDK puts the id into the URL path as is, so `/`, `..`, `?` or `#` would change the route.
+_CRAWL_ID = re.compile(r"[A-Za-z0-9_-]+")
 
 _T = TypeVar("_T")
 
@@ -80,6 +82,12 @@ def _call_api(call: Callable[[], _T], *, context: str = "") -> _T:
         msg, reason = f"Decodo API error: {exc}", exc
     except DecodoTimeoutError as exc:
         msg, reason = f"Decodo API request timed out: {exc}", exc
+    # httpx puts the whole header value, API key included, in these messages.
+    except (httpx.LocalProtocolError, UnicodeEncodeError):
+        raise RuntimeError(
+            f"{context}The request to Decodo could not be sent. Check the API key for "
+            "line breaks or other characters an HTTP header cannot hold."
+        ) from None
     # The SDK lets connection errors and unparsable bodies through as they are.
     except httpx.RequestError as exc:
         msg, reason = f"Decodo API network error: {exc}", exc
@@ -544,9 +552,13 @@ class DecodoCrawlCancelTool(_DecodoDataApiTool):
             JSON string of the cancel response.
 
         Raises:
-            ValueError: If no API key is configured.
+            ValueError: If no API key is configured or `crawl_id` is not a crawl id.
             RuntimeError: On API errors or network failures.
         """
+        crawl_id = crawl_id.strip()
+        if not _CRAWL_ID.fullmatch(crawl_id):
+            msg = f"Not a crawl id: {crawl_id!r}. Use status.crawl_id from a decodo_crawl result."
+            raise ValueError(msg)
         api = self._api()
         response = _call_api(lambda: api.cancel_crawl(crawl_id))
         return json.dumps(response, ensure_ascii=False, indent=2)

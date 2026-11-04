@@ -98,20 +98,20 @@ Use `uv` for all environment and dependency operations in this monorepo. Do not 
 
 #### PR and commit titles
 
-Follow Conventional Commits. See `.github/workflows/pr_lint.yml` for allowed types and scopes. All titles must include a scope with no exceptions — even for the main `langchain` package.
+Follow Conventional Commits. See `.github/workflows/pr_lint.yml` for allowed types. Leave out the scope: this fork only releases `langchain-decodo`, so `(decodo)` adds nothing.
 
-- Start the text after `type(scope):` with a lowercase letter, unless the first word is a proper noun (e.g. `Azure`, `GitHub`, `OpenAI`) or a named entity (class, function, method, parameter, or variable name).
+- Start the text after `type:` with a lowercase letter, unless the first word is a proper noun (e.g. `Azure`, `GitHub`, `OpenAI`) or a named entity (class, function, method, parameter, or variable name).
 - Wrap named entities in backticks so they render as code. Proper nouns are left unadorned.
 - Keep titles short and descriptive — save detail for the body.
 
 Examples:
 
 ```txt
-feat(langchain): add new chat completion feature
-fix(core): resolve type hinting issue in vector store
-chore(anthropic): update infrastructure dependencies
-feat(langchain): `ls_agent_type` tag on `create_agent` calls
-fix(openai): infer Azure chat profiles from model name
+feat: add web search, map and crawl tools
+fix: return collected pages when a crawl is cancelled
+docs: update model names in README examples
+fix: retry `DecodoSearchTool` on status 613
+ci: set up semantic release
 ```
 
 #### Branch naming

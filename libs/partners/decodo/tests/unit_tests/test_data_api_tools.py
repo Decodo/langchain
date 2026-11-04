@@ -73,6 +73,12 @@ ALL_TOOLS: list[Any] = [
     DecodoCrawlCancelTool,
 ]
 
+TOOL_ARGS: dict[Any, dict[str, Any]] = {
+    DecodoWebSearchTool: {"query": "coffee"},
+    DecodoMapTool: {"url": "https://example.com"},
+    DecodoCrawlTool: {"url": "https://example.com"},
+    DecodoCrawlCancelTool: {"crawl_id": "crawl-123"},
+}
 
 # ---------------------------------------------------------------------------
 # Shared behavior
@@ -121,6 +127,29 @@ class TestErrors:
         with patch("decodo.http.httpx.request", side_effect=httpx.ConnectError("refused")):
             with pytest.raises(RuntimeError, match="network error: refused"):
                 DecodoMapTool(decodo_api_token=API_KEY)._run("https://example.com")
+
+    @pytest.mark.parametrize("tool_cls", ALL_TOOLS)
+    def test_key_with_line_break_stays_out_of_the_error(self, tool_cls: Any) -> None:
+        # h11 refuses the header only once connected, so the refusal is simulated.
+        refusal = httpx.LocalProtocolError("Illegal header value b'Bearer abcd1234\\nefgh5678ijkl'")
+        with patch("decodo.http.httpx.request", side_effect=refusal):
+            with pytest.raises(RuntimeError, match="could not be sent") as exc_info:
+                tool_cls(decodo_api_token=SecretStr("abcd1234\nefgh5678ijkl")).invoke(
+                    TOOL_ARGS[tool_cls]
+                )
+
+        assert "efgh5678" not in str(exc_info.value)
+        assert exc_info.value.__suppress_context__
+
+    @pytest.mark.parametrize("tool_cls", ALL_TOOLS)
+    def test_key_httpx_cannot_encode_stays_out_of_the_error(self, tool_cls: Any) -> None:
+        with pytest.raises(RuntimeError, match="could not be sent") as exc_info:
+            tool_cls(decodo_api_token=SecretStr("abcd1234\u2028efgh5678ijkl")).invoke(
+                TOOL_ARGS[tool_cls]
+            )
+
+        assert "efgh5678" not in str(exc_info.value)
+        assert exc_info.value.__suppress_context__
 
     def test_non_json_success_becomes_runtime_error(self) -> None:
         response = MagicMock(status_code=200, is_success=True)
@@ -475,3 +504,20 @@ class TestDecodoCrawlCancelTool:
 
         assert json.loads(result) == cancelled
         assert api.calls[0]["url"] == f"{BASE_URL}/v1/crawl/{CRAWL_ID}/cancel"
+
+    def test_strips_whitespace_around_crawl_id(self, api: FakeApi) -> None:
+        api.add(f"POST /v1/crawl/{CRAWL_ID}/cancel", {"crawl_id": CRAWL_ID})
+
+        DecodoCrawlCancelTool(decodo_api_token=API_KEY).invoke({"crawl_id": f" {CRAWL_ID}\n"})
+
+        assert api.calls[0]["url"] == f"{BASE_URL}/v1/crawl/{CRAWL_ID}/cancel"
+
+    @pytest.mark.parametrize(
+        "crawl_id", ["x/../../search", "x?y=1#frag", "a/b", "..", "", "crawl 123", "id\nmore"]
+    )
+    def test_refuses_id_that_would_change_the_route(self, crawl_id: str) -> None:
+        with patch("decodo.http.httpx.request") as request:
+            with pytest.raises(ValueError, match="Not a crawl id"):
+                DecodoCrawlCancelTool(decodo_api_token=API_KEY).invoke({"crawl_id": crawl_id})
+
+        request.assert_not_called()
