@@ -1,6 +1,15 @@
 from langchain_decodo import __all__
 
-EXPECTED_ALL = ["DecodoLoader", "DecodoSearchTool", "DecodoWebScrapeTool", "__version__"]
+EXPECTED_ALL = [
+    "DecodoCrawlCancelTool",
+    "DecodoCrawlTool",
+    "DecodoLoader",
+    "DecodoMapTool",
+    "DecodoSearchTool",
+    "DecodoWebScrapeTool",
+    "DecodoWebSearchTool",
+    "__version__",
+]
 
 
 def test_all_imports() -> None:

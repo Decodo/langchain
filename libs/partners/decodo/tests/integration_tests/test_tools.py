@@ -1,9 +1,12 @@
 """Integration tests for langchain_decodo tools.
 
-Run with a real Decodo API key in DECODO_API_TOKEN (a basic auth token from an older
-plan needs `auth_mode="basic"` in the constructors below):
+Run with a real Decodo API key in DECODO_API_TOKEN:
 
     DECODO_API_TOKEN=your_api_key pytest tests/integration_tests/
+
+To run with a basic auth token from an older plan instead, also set
+DECODO_AUTH_MODE=basic. The search, map and crawl tests are skipped then, since
+those endpoints only accept an API key.
 
 All tests are skipped automatically when ``DECODO_API_TOKEN`` is not set in
 the environment, so this file is safe to include in CI without secrets.
@@ -13,7 +16,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 
@@ -23,26 +26,30 @@ pytestmark = pytest.mark.skipif(
     reason="DECODO_API_TOKEN environment variable (API key) is not set",
 )
 
+AUTH_MODE: Literal["basic", "token"] = (
+    "basic" if os.environ.get("DECODO_AUTH_MODE") == "basic" else "token"
+)
+
 
 @pytest.fixture()
 def scrape_tool() -> Any:
     from langchain_decodo.tools import DecodoWebScrapeTool
 
-    return DecodoWebScrapeTool(auth_mode="token")
+    return DecodoWebScrapeTool(auth_mode=AUTH_MODE)
 
 
 @pytest.fixture()
 def search_tool() -> Any:
     from langchain_decodo.tools import DecodoSearchTool
 
-    return DecodoSearchTool(auth_mode="token")
+    return DecodoSearchTool(auth_mode=AUTH_MODE)
 
 
 @pytest.fixture()
 def loader() -> Any:
     from langchain_decodo import DecodoLoader
 
-    return DecodoLoader(urls=["https://example.com"], auth_mode="token")
+    return DecodoLoader(urls=["https://example.com"], auth_mode=AUTH_MODE)
 
 
 # ---------------------------------------------------------------------------
@@ -116,7 +123,7 @@ class TestDecodoLoaderIntegration:
 
         from langchain_decodo import DecodoLoader
 
-        loader = DecodoLoader(urls="https://example.com", auth_mode="token")
+        loader = DecodoLoader(urls="https://example.com", auth_mode=AUTH_MODE)
         docs = loader.load()
         assert isinstance(docs, list)
         assert len(docs) > 0
@@ -130,7 +137,7 @@ class TestDecodoLoaderIntegration:
 
         from langchain_decodo import DecodoLoader
 
-        loader = DecodoLoader(urls=["https://example.com"], auth_mode="token")
+        loader = DecodoLoader(urls=["https://example.com"], auth_mode=AUTH_MODE)
         docs = list(loader.lazy_load())
         assert all(isinstance(d, Document) for d in docs)
 
@@ -139,7 +146,7 @@ class TestDecodoLoaderIntegration:
 
         loader = DecodoLoader(
             urls=["https://this-domain-definitely-does-not-exist-xyz123.com"],
-            auth_mode="token",
+            auth_mode=AUTH_MODE,
             continue_on_error=True,
         )
         docs = loader.load()
@@ -147,3 +154,34 @@ class TestDecodoLoaderIntegration:
         assert isinstance(docs, list)
         if docs:
             assert "error" in docs[0].metadata
+
+
+# ---------------------------------------------------------------------------
+# Search, map and crawl tools (API key only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.skipif(AUTH_MODE == "basic", reason="search, map and crawl need an API key")
+class TestDataApiToolsIntegration:
+    def test_web_search_returns_organic_results(self) -> None:
+        from langchain_decodo import DecodoWebSearchTool
+
+        result = json.loads(DecodoWebSearchTool().invoke({"query": "Python programming language"}))
+        assert len(result["organic"]) > 0
+        assert "link" in result["organic"][0]
+
+    def test_map_lists_links(self) -> None:
+        from langchain_decodo import DecodoMapTool
+
+        result = json.loads(DecodoMapTool().invoke({"url": "https://www.python.org", "limit": 5}))
+        links = result["results"][0]["content"]["links"]
+        assert 0 < len(links) <= 5
+
+    def test_crawl_returns_page_content(self) -> None:
+        from langchain_decodo import DecodoCrawlTool
+
+        tool = DecodoCrawlTool(timeout=300)
+        result = json.loads(tool.invoke({"url": "https://example.com", "limit": 1}))
+        assert result["status"]["status"] in {"done", "truncated"}
+        assert len(result["pages"]) > 0
+        assert "documentation examples" in result["pages"][0].get("content", "")

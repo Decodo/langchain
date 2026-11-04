@@ -19,13 +19,14 @@ Both tools support two authentication modes selected via ``auth_mode``:
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Literal
 
 import httpx
 from langchain_core.callbacks import CallbackManagerForToolRun
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field, SecretStr, model_validator
+
+from langchain_decodo._common import INTEGRATION_HEADER, is_failed, token_from_env
 
 # API keys and basic auth tokens are only accepted on their own host.
 _BASIC_BASE_URL = "https://scraper-api.decodo.com"
@@ -77,7 +78,7 @@ def _build_headers(token: str, auth_mode: str) -> dict[str, str]:
         "Authorization": f"{scheme} {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "x-integration": "langchain-python",
+        "x-integration": INTEGRATION_HEADER,
     }
 
 
@@ -125,12 +126,6 @@ def _do_scrape(
         raise RuntimeError(f"Decodo API error: {error_message}")
 
     return response.json()  # type: ignore[no-any-return]
-
-
-def _is_failed(entry: dict[str, Any]) -> bool:
-    """Return whether a result entry carries a failed (4xx/5xx or 6xx) status."""
-    status = entry.get("status_code")
-    return isinstance(status, int) and status >= 400
 
 
 def _extract_content(response: dict[str, Any]) -> str:
@@ -272,10 +267,7 @@ class DecodoWebScrapeTool(BaseTool):
         Returns:
             Updated field values with the token populated from env if needed.
         """
-        if not values.get("decodo_api_token"):
-            env_token = os.environ.get("DECODO_API_TOKEN", "")
-            values["decodo_api_token"] = SecretStr(env_token)
-        return values
+        return token_from_env(values)
 
     def _run(
         self,
@@ -398,10 +390,7 @@ class DecodoSearchTool(BaseTool):
         Returns:
             Updated field values with the token populated from env if needed.
         """
-        if not values.get("decodo_api_token"):
-            env_token = os.environ.get("DECODO_API_TOKEN", "")
-            values["decodo_api_token"] = SecretStr(env_token)
-        return values
+        return token_from_env(values)
 
     def _run(
         self,
@@ -452,7 +441,7 @@ class DecodoSearchTool(BaseTool):
         # A failed scrape comes back as HTTP 200, either with a failed status
         # inside `results` or with no `results` at all (e.g. status 613). Raise
         # so agents can retry instead of reading it as "no results".
-        if not results or all(_is_failed(entry) for entry in results):
+        if not results or all(is_failed(entry) for entry in results):
             status = results[0].get("status_code") if results else response.get("status_code")
             message = response.get("message") or "no results returned"
             raise RuntimeError(f"Decodo search failed (status {status}): {message}")

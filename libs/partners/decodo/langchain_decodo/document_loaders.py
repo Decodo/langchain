@@ -47,6 +47,8 @@ from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 from pydantic import SecretStr
 
+from langchain_decodo._common import INTEGRATION_HEADER, TOKEN_ENV_VAR
+
 # API keys and basic auth tokens are only accepted on their own host.
 _BASIC_SCRAPE_ENDPOINT = "https://scraper-api.decodo.com/v2/scrape"
 _TOKEN_SCRAPE_ENDPOINT = "https://data.decodo.com/v1/scrape"
@@ -83,7 +85,7 @@ def _build_headers(token: str, auth_mode: str) -> dict[str, str]:
         "Authorization": f"{scheme} {token}",
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "x-integration": "langchain-python",
+        "x-integration": INTEGRATION_HEADER,
     }
 
 
@@ -219,7 +221,7 @@ class DecodoLoader(BaseLoader):
         self._urls: list[str] = urls
         self._auth_mode = auth_mode
 
-        raw_token = api_token or os.environ.get("DECODO_API_TOKEN", "")
+        raw_token = api_token or os.environ.get(TOKEN_ENV_VAR, "")
         if not raw_token:
             raise ValueError(
                 "Decodo API key or token is required. Provide it via the ``api_token`` "
