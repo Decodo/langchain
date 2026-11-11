@@ -46,7 +46,7 @@ Handles JavaScript rendering, CAPTCHAs, and geo-blocking automatically.
 from langchain_decodo import DecodoWebScrapeTool
 
 tool = DecodoWebScrapeTool(auth_mode="token")  # reads DECODO_API_TOKEN from env
-content = tool.run("https://example.com")
+content = tool.invoke("https://example.com")
 print(content)
 ```
 
@@ -64,7 +64,7 @@ tool = DecodoWebScrapeTool(
 
 ### `DecodoSearchTool`
 
-Search Google, Amazon, or Reddit and return structured JSON results.
+Search Google or Amazon and return structured JSON results.
 
 ```python
 from langchain_decodo import DecodoSearchTool
@@ -72,25 +72,34 @@ from langchain_decodo import DecodoSearchTool
 tool = DecodoSearchTool(auth_mode="token")
 
 # Google search (default)
-results = tool.run({"query": "LangChain latest release", "engine": "google"})
+results = tool.invoke({"query": "LangChain latest release", "engine": "google"})
 
 # Amazon product search
-results = tool.run({"query": "Python programming book", "engine": "amazon"})
-
-# Reddit discussion search
-results = tool.run({"query": "best web scraping libraries", "engine": "reddit"})
+results = tool.invoke({"query": "Python programming book", "engine": "amazon"})
 ```
 
 Returns a JSON string — a list of objects with `content`, `url`, and
-`status_code` fields.
+`status_code` fields. The parsed results are in `content`, for example the
+Google organic results at `content.results.results.organic`.
 
 Supported engines:
 
-| `engine` | Decodo target                       | Description           |
-| -------- | ----------------------------------- | --------------------- |
-| `google` | `google_search`                     | Google SERP           |
-| `amazon` | `amazon_search`                     | Amazon product search |
-| `reddit` | `google_search` + `site:reddit.com` | Reddit via Google     |
+| `engine` | Decodo target   | Description           |
+| -------- | --------------- | --------------------- |
+| `google` | `google_search` | Google SERP           |
+| `amazon` | `amazon_search` | Amazon product search |
+
+Also accepts `num_results` (1 to 100, default 10), which is sent to the API as
+`limit`.
+
+Two things worth knowing:
+
+- Pass `engine` with every call. Setting it on the constructor
+  (`DecodoSearchTool(engine="amazon")`) has no effect and the search still goes
+  to Google. An `engine` value the tool does not recognise is not rejected
+  either; it falls back to Google.
+- `num_results` does not cap the results returned. A Google search with
+  `num_results=3` still returns the full first page of organic results.
 
 ### `DecodoWebSearchTool`
 
@@ -192,12 +201,30 @@ for doc in docs:
     print(doc.metadata["url"], "—", len(doc.page_content), "chars")
 ```
 
+URLs are scraped one at a time, in order. Use `load()` for a list of every
+document, or `lazy_load()` to process them as they arrive.
+
+| Argument            | Default            | Description                                           |
+| ------------------- | ------------------ | ----------------------------------------------------- |
+| `urls` | – | A single URL or a list of URLs. Required |
+| `api_token` | `DECODO_API_TOKEN` | API key, or basic authentication token on older plans |
+| `auth_mode` | `"basic"` | Set to `"token"` for an API key |
+| `timeout` | `180` | Request timeout in seconds, per URL |
+| `continue_on_error` | `True` | Keep loading the other URLs when one fails |
+
 Each `Document` has:
 
 - `page_content` — scraped text/markdown.
 - `metadata["url"]` — the source URL.
 - `metadata["source"]` — same as `url` (LangChain convention).
 - `metadata["status_code"]` — HTTP status from the target site.
+- `metadata["task_id"]`, `metadata["created_at"]`, `metadata["updated_at"]` —
+  carried through when the API returns them.
+
+With `continue_on_error` on, a failed URL still produces a `Document`, with
+empty `page_content` and the error message in `metadata["error"]`. Filter those
+out before embedding. Set `continue_on_error=False` to raise on the first
+failure instead.
 
 ## LangChain agent example
 
